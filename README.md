@@ -63,7 +63,7 @@ A comprehensive system for detecting illegal open-crust mining activities using 
 
 4. **Run the backend server**
    ```bash
-   python app.py
+   python app_simple.py
    ```
    The API will be available at `http://localhost:8000`
 
