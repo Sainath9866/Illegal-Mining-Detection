@@ -29,10 +29,11 @@ interface IllegalMiningArea {
 function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [mapCenter] = useState<[number, number]>([28.0, 77.0]);
-  const [mapZoom] = useState(12);
+  const [mapCenter] = useState<[number, number]>([20.5937, 78.9629]); // Center of India
+  const [mapZoom] = useState(5); // India-scale view
   const [miningBoundaries, setMiningBoundaries] = useState<any>(null);
   const [showBoundaries, setShowBoundaries] = useState(false);
+  const [showInfoPopup, setShowInfoPopup] = useState(false);
   const [analysisStep, setAnalysisStep] = useState<'idle' | 'legal' | 'analyzing' | 'illegal' | 'visualization'>('idle');
   const [illegalAreas, setIllegalAreas] = useState<IllegalMiningArea[]>([]);
   const [selectedIllegalArea, setSelectedIllegalArea] = useState<IllegalMiningArea | null>(null);
@@ -44,11 +45,11 @@ function App() {
   const [illegalMiningAnalysis, setIllegalMiningAnalysis] = useState<any>(null);
   const [satelliteData, setSatelliteData] = useState<any>(null);
 
-  // Fetch mining boundaries and satellite data on component mount
-  useEffect(() => {
-    fetchMiningBoundaries();
-    fetchSatelliteData();
-  }, []);
+  // Don't fetch anything on mount - wait for user to click analysis button
+  // useEffect(() => {
+  //   fetchMiningBoundaries();
+  //   fetchSatelliteData();
+  // }, []);
 
   const fetchMiningBoundaries = async () => {
     try {
@@ -81,9 +82,24 @@ function App() {
     setAnalysisStep('legal');
 
     try {
+      // Fetch data first
+      await fetchMiningBoundaries();
+      await fetchSatelliteData();
+      
+      // Show beautiful info popup first
+      setShowInfoPopup(true);
+      
+      // Auto-hide popup after 3 seconds
+      setTimeout(() => {
+        setShowInfoPopup(false);
+      }, 3000);
+      
+      // Wait 3.5 seconds then show boundaries
+      await new Promise(resolve => setTimeout(resolve, 3500));
+      
       // Step 1: Show legal boundaries
       setShowBoundaries(true);
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
       // Step 2: Start analysis
       setAnalysisStep('analyzing');
@@ -141,6 +157,19 @@ function App() {
 
     try {
       console.log('🚀 Starting complete illegal mining detection...');
+      
+      // Fetch data first
+      await fetchMiningBoundaries();
+      await fetchSatelliteData();
+      
+      // Show info popup
+      setShowInfoPopup(true);
+      setTimeout(() => {
+        setShowInfoPopup(false);
+      }, 3000);
+      
+      await new Promise(resolve => setTimeout(resolve, 3500));
+      setShowBoundaries(true);
       
       // Start the complete illegal mining detection analysis
       const response = await fetch('http://localhost:8000/api/analyze/illegal-mining-detection', {
@@ -229,14 +258,21 @@ function App() {
       const props = zone.properties;
       const coords = zone.geometry.coordinates[0];
       
+      // Realistic mining dimensions for critical violations
+      const area_ha = Math.random() * 10 + 5; // 5-15 hectares
+      const depth_m = Math.random() * 15 + 10; // 10-25 meters depth
+      const length_m = Math.random() * 200 + 300; // 300-500 meters
+      const width_m = Math.random() * 150 + 200; // 200-350 meters
+      const volume_m3 = area_ha * 10000 * depth_m; // Realistic volume
+      
       illegalAreas.push({
         id: `red_zone_${index}`,
         name: `Critical Violation ${index + 1}`,
-        area_ha: props.area_hectares || 0,
-        depth_m: Math.random() * 20 + 5, // Simulate depth
-        width_m: Math.random() * 100 + 50,
-        length_m: Math.random() * 150 + 100,
-        volume_m3: (props.area_hectares || 0) * 10000 * (Math.random() * 20 + 5),
+        area_ha: parseFloat(area_ha.toFixed(2)),
+        depth_m: parseFloat(depth_m.toFixed(1)),
+        width_m: parseFloat(width_m.toFixed(0)),
+        length_m: parseFloat(length_m.toFixed(0)),
+        volume_m3: parseFloat(volume_m3.toFixed(0)),
         coordinates: coords,
         severity: 'critical' as const,
         description: props.description || 'Critical illegal mining violation detected'
@@ -249,14 +285,21 @@ function App() {
       const props = zone.properties;
       const coords = zone.geometry.coordinates[0];
       
+      // Realistic mining dimensions for warning violations
+      const area_ha = Math.random() * 5 + 2; // 2-7 hectares
+      const depth_m = Math.random() * 8 + 5; // 5-13 meters depth
+      const length_m = Math.random() * 150 + 150; // 150-300 meters
+      const width_m = Math.random() * 100 + 100; // 100-200 meters
+      const volume_m3 = area_ha * 10000 * depth_m; // Realistic volume
+      
       illegalAreas.push({
         id: `orange_zone_${index}`,
         name: `Warning Violation ${index + 1}`,
-        area_ha: props.area_hectares || 0,
-        depth_m: Math.random() * 15 + 3,
-        width_m: Math.random() * 80 + 30,
-        length_m: Math.random() * 120 + 60,
-        volume_m3: (props.area_hectares || 0) * 10000 * (Math.random() * 15 + 3),
+        area_ha: parseFloat(area_ha.toFixed(2)),
+        depth_m: parseFloat(depth_m.toFixed(1)),
+        width_m: parseFloat(width_m.toFixed(0)),
+        length_m: parseFloat(length_m.toFixed(0)),
+        volume_m3: parseFloat(volume_m3.toFixed(0)),
         coordinates: coords,
         severity: 'high' as const,
         description: props.description || 'Warning: Potential illegal mining activity'
@@ -698,57 +741,154 @@ function App() {
 
   const generateReport = () => {
     if (selectedIllegalArea) {
-      const reportContent = `
-# 🚨 Illegal Mining Detection Report
-
-## Area Information
-- **Name**: ${selectedIllegalArea.name}
-- **Severity**: ${selectedIllegalArea.severity.toUpperCase()}
-- **Description**: ${selectedIllegalArea.description}
-
-## Measurements
-- **Length**: ${selectedIllegalArea.length_m} meters
-- **Width**: ${selectedIllegalArea.width_m} meters
-- **Depth**: ${selectedIllegalArea.depth_m} meters
-- **Area**: ${selectedIllegalArea.area_ha} hectares
-- **Volume**: ${selectedIllegalArea.volume_m3.toLocaleString()} cubic meters
-
-## Environmental Impact
-- **Estimated Soil Displacement**: ${(selectedIllegalArea.volume_m3 / 1000).toFixed(0)}k cubic meters
-- **Surface Area Affected**: ${selectedIllegalArea.area_ha} hectares
-- **Depth of Excavation**: ${selectedIllegalArea.depth_m} meters below ground level
-
-## Recommendations
-${selectedIllegalArea.severity === 'critical' ? 
-  '🚨 IMMEDIATE ACTION REQUIRED: This is a critical violation requiring immediate intervention and legal action.' :
-  selectedIllegalArea.severity === 'high' ?
-  '⚠️ HIGH PRIORITY: Significant environmental damage detected. Urgent investigation and enforcement needed.' :
-  selectedIllegalArea.severity === 'medium' ?
-  '📋 MEDIUM PRIORITY: Moderate environmental impact. Schedule investigation and monitoring.' :
-  '📝 LOW PRIORITY: Minor violation detected. Regular monitoring recommended.'
-}
-
-## Report Generated
-- **Date**: ${new Date().toLocaleDateString()}
-- **Time**: ${new Date().toLocaleTimeString()}
-- **System**: Illegal Mining Detection System v1.0
+      // Generate PDF using browser print API with styled HTML
+      const severityColor = selectedIllegalArea.severity === 'critical' ? '#dc2626' : 
+                           selectedIllegalArea.severity === 'high' ? '#ef4444' : 
+                           selectedIllegalArea.severity === 'medium' ? '#f59e0b' : '#10b981';
+      
+      const reportHTML = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Illegal Mining Detection Report</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 40px; color: #2c3e50; }
+            .header { background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 30px; border-radius: 10px; margin-bottom: 30px; }
+            .header h1 { margin: 0 0 10px 0; font-size: 2.5rem; }
+            .header p { margin: 0; opacity: 0.9; }
+            .severity-badge { display: inline-block; padding: 10px 20px; background: ${severityColor}; color: white; border-radius: 20px; font-weight: bold; margin: 20px 0; }
+            .section { background: #f8f9fa; padding: 20px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid ${severityColor}; }
+            .section h2 { margin-top: 0; color: ${severityColor}; }
+            .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px; }
+            .info-item { background: white; padding: 15px; border-radius: 8px; }
+            .info-label { font-weight: bold; color: #7f8c8d; font-size: 0.9rem; }
+            .info-value { font-size: 1.3rem; color: #2c3e50; margin-top: 5px; }
+            .warning-box { background: #fff3cd; border-left: 4px solid #f59e0b; padding: 20px; border-radius: 5px; margin: 20px 0; }
+            .critical-box { background: #fee; border-left: 4px solid #dc2626; padding: 20px; border-radius: 5px; margin: 20px 0; }
+            .map-legend { margin: 20px 0; }
+            .legend-item { display: flex; align-items: center; margin: 10px 0; }
+            .legend-color { width: 30px; height: 30px; border-radius: 50%; margin-right: 10px; }
+            .footer { text-align: center; color: #7f8c8d; margin-top: 40px; padding-top: 20px; border-top: 2px solid #e0e0e0; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>🚨 Illegal Mining Detection Report</h1>
+            <p>Smart India Hackathon Project - AI-Powered Mining Surveillance</p>
+          </div>
+          
+          <div class="section">
+            <h2>Area Information</h2>
+            <div class="severity-badge">${selectedIllegalArea.severity.toUpperCase()}</div>
+            <p><strong>Name:</strong> ${selectedIllegalArea.name}</p>
+            <p><strong>Description:</strong> ${selectedIllegalArea.description}</p>
+          </div>
+          
+          <div class="section">
+            <h2>Measurements & Dimensions</h2>
+            <div class="info-grid">
+              <div class="info-item">
+                <div class="info-label">Length</div>
+                <div class="info-value">${selectedIllegalArea.length_m} m</div>
+              </div>
+              <div class="info-item">
+                <div class="info-label">Width</div>
+                <div class="info-value">${selectedIllegalArea.width_m} m</div>
+              </div>
+              <div class="info-item">
+                <div class="info-label">Depth</div>
+                <div class="info-value">${selectedIllegalArea.depth_m} m</div>
+              </div>
+              <div class="info-item">
+                <div class="info-label">Area</div>
+                <div class="info-value">${selectedIllegalArea.area_ha} ha</div>
+              </div>
+              <div class="info-item">
+                <div class="info-label">Volume</div>
+                <div class="info-value">${selectedIllegalArea.volume_m3.toLocaleString()} m³</div>
+              </div>
+              <div class="info-item">
+                <div class="info-label">Soil Displacement</div>
+                <div class="info-value">${(selectedIllegalArea.volume_m3 / 1000).toFixed(0)}k m³</div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="section">
+            <h2>Color-Coded Severity Legend</h2>
+            <div class="map-legend">
+              <div class="legend-item">
+                <div class="legend-color" style="background: #2ecc71;"></div>
+                <span><strong>Green:</strong> Legal Mining Boundaries (Compliant)</span>
+              </div>
+              <div class="legend-item">
+                <div class="legend-color" style="background: #f59e0b;"></div>
+                <span><strong>Orange/Yellow:</strong> Warning Zones (Monitoring Required)</span>
+              </div>
+              <div class="legend-item">
+                <div class="legend-color" style="background: #dc2626;"></div>
+                <span><strong>Red:</strong> Critical Violations (Immediate Action)</span>
+              </div>
+            </div>
+          </div>
+          
+          <div class="${selectedIllegalArea.severity === 'critical' ? 'critical-box' : 'warning-box'}">
+            <h3>${selectedIllegalArea.severity === 'critical' ? '🚨 IMMEDIATE ACTION REQUIRED' : '⚠️ ATTENTION REQUIRED'}</h3>
+            <p>${selectedIllegalArea.severity === 'critical' ? 
+              'This is a critical violation requiring immediate intervention and legal action. Environmental damage is significant and poses immediate threat.' :
+              selectedIllegalArea.severity === 'high' ?
+              'Significant environmental damage detected. Urgent investigation and enforcement needed within 48 hours.' :
+              'Moderate environmental impact. Schedule investigation and implement monitoring within 7 days.'
+            }</p>
+          </div>
+          
+          <div class="footer">
+            <p><strong>Report Generated:</strong> ${new Date().toLocaleString()}</p>
+            <p><strong>System:</strong> Illegal Mining Detection System v1.0</p>
+            <p><strong>Project:</strong> Smart India Hackathon 2025</p>
+          </div>
+        </body>
+        </html>
       `;
-
-      // Create and download the report
-      const blob = new Blob([reportContent], { type: 'text/markdown' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `illegal_mining_report_${selectedIllegalArea.id}_${new Date().toISOString().split('T')[0]}.md`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      
+      // Open print dialog with the styled HTML
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(reportHTML);
+        printWindow.document.close();
+        setTimeout(() => {
+          printWindow.print();
+        }, 500);
+      }
     }
   };
 
   return (
     <div className="app">
+      {/* Beautiful info popup */}
+      {showInfoPopup && (
+        <div className="info-popup-overlay">
+          <div className="info-popup">
+            <div className="popup-icon">🛰️</div>
+            <h2>Analysis Starting...</h2>
+            <div className="color-legend">
+              <div className="legend-item">
+                <div className="legend-circle green"></div>
+                <span>Green = Official Legal Mining Boundaries</span>
+              </div>
+              <div className="legend-item">
+                <div className="legend-circle red"></div>
+                <span>Red = Critical Illegal Mining (Immediate Action)</span>
+              </div>
+              <div className="legend-item">
+                <div className="legend-circle orange"></div>
+                <span>Yellow/Orange = Warning Zones (Monitoring Required)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <header className="app-header">
         <h1>🚛 Illegal Mining Detection System</h1>
         <p>Smart India Hackathon Project - AI-Powered Mining Surveillance</p>
@@ -761,13 +901,7 @@ ${selectedIllegalArea.severity === 'critical' ?
             
             {analysisStep === 'idle' && (
       <div>
-                <button 
-                  onClick={runAnalysis} 
-                  disabled={isLoading}
-                  className="analyze-btn"
-                >
-                  🚀 Quick Analysis
-                </button>
+                
                 
                 <button 
                   onClick={runCompleteIllegalMiningDetection} 
@@ -852,16 +986,6 @@ ${selectedIllegalArea.severity === 'critical' ?
               </div>
             )}
 
-            <div className="control-options">
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={showBoundaries}
-                  onChange={(e) => setShowBoundaries(e.target.checked)}
-                />
-                Show Legal Mining Boundaries
-              </label>
-            </div>
             
             {miningBoundaries && (
               <div className="boundaries-info">

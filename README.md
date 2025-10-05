@@ -1,33 +1,32 @@
-# 🚛 Illegal Mining Detection System
+# Illegal Mining Detection System
 
-A comprehensive system for detecting illegal open-crust mining activities using satellite imagery and Digital Elevation Models (DEM). This project was developed for the Smart India Hackathon.
+A comprehensive end-to-end system for detecting illegal open-crust mining activities using satellite imagery and DEM data, built for the Smart India Hackathon.
 
-## 🌟 Features
+## 🎯 Overview
 
-- **Satellite Data Acquisition**: Download and process Sentinel-2, Sentinel-1, and DEM data using Google Earth Engine
-- **Mining Detection**: Rule-based and ML-based detection of mining areas using NDVI and BSI indices
-- **Illegal Mining Identification**: Compare detected mining areas with legal boundaries to identify violations
-- **Depth & Volume Estimation**: Calculate mining depth and volume using DEM analysis and Simpson's rule
-- **2D & 3D Visualization**: Interactive maps and 3D visualizations using Folium, Plotly, and PyVista
-- **Automated Reporting**: Generate comprehensive PDF reports with statistics and visualizations
-- **Web Interface**: Modern React frontend with interactive maps and real-time analysis
+This system provides:
+- **Real satellite data acquisition** from Sentinel-2, Sentinel-1 SAR, and DEM sources via Google Earth Engine
+- **Advanced spectral analysis** using NDVI, BSI, NDBI, and other indices
+- **Spatial overlay analysis** to compare detected mining with legal lease boundaries
+- **Interactive 2D visualization** with Leaflet and radar-style location markers
+- **Automated PDF report generation** with color-coded severity levels
+- **RESTful API** with FastAPI for easy integration
+- **Modern React frontend** with beautiful UI and animations
 
 ## 🏗️ Architecture
 
-### Backend (Python + FastAPI)
-- **Data Acquisition**: Google Earth Engine integration for satellite data
-- **Preprocessing**: Image reprojection, clipping, normalization, and DEM processing
-- **Mining Detection**: Rule-based detection using spectral indices
-- **Illegal Mining Detection**: Spatial analysis and boundary comparison
-- **Volume Estimation**: DEM-based depth and volume calculations
-- **Visualization**: 2D maps and 3D visualizations
-- **Report Generation**: Automated PDF report creation
-
-### Frontend (React + TypeScript)
-- **Interactive Maps**: Leaflet-based mapping with satellite imagery
-- **Real-time Analysis**: Live analysis results and statistics
-- **3D Visualization**: Interactive 3D mining visualizations
-- **Report Download**: PDF report generation and download
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Frontend      │    │   Backend API   │    │   Data Sources  │
+│   (React)       │◄──►│   (FastAPI)     │◄──►│   (GEE/SAR)     │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+                              │
+                              ▼
+                       ┌─────────────────┐
+                       │   Processing    │
+                       │   Pipeline      │
+                       └─────────────────┘
+```
 
 ## 🚀 Quick Start
 
@@ -36,210 +35,173 @@ A comprehensive system for detecting illegal open-crust mining activities using 
 - Python 3.8+
 - Node.js 16+
 - Google Earth Engine account
-- Git
+- Google Cloud Project with Earth Engine API enabled
 
-### Backend Setup
+### Installation
 
 1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd illegal-mining-detection
-   ```
-
-2. **Install Python dependencies**
-   ```bash
-   cd backend
-   pip install -r requirements.txt
-   ```
-
-3. **Set up Google Earth Engine**
-   ```bash
-   # Install Google Earth Engine Python API
-   pip install earthengine-api
-   
-   # Authenticate (follow the prompts)
-   earthengine authenticate
-   ```
-
-4. **Run the backend server**
-   ```bash
-   python app_simple.py
-   ```
-   The API will be available at `http://localhost:8000`
-
-### Frontend Setup
-
-1. **Install Node.js dependencies**
-   ```bash
-   cd frontend
-   npm install
-   ```
-
-2. **Start the development server**
-   ```bash
-   npm run dev
-   ```
-   The frontend will be available at `http://localhost:5173`
-
-## 📊 Usage
-
-### 1. Data Acquisition
-```python
-from data_acquisition import DataAcquisition
-
-# Initialize data acquisition
-data_acq = DataAcquisition()
-
-# Define area of interest
-aoi = {
-    "type": "Polygon",
-    "coordinates": [[[77.0, 28.0], [77.1, 28.0], [77.1, 28.1], [77.0, 28.1], [77.0, 28.0]]]
-}
-
-# Get satellite data
-sentinel2 = data_acq.get_sentinel2_data(aoi, "2023-01-01", "2023-12-31")
-dem = data_acq.get_dem_data(aoi)
+```bash
+git clone <repository-url>
+cd illegal-mining-detection
 ```
 
-### 2. Mining Detection
-```python
-from mining_detection import MiningDetection
-
-# Initialize mining detection
-detector = MiningDetection(ndvi_threshold=0.2, bsi_threshold=0.3)
-
-# Detect mining areas
-results = detector.detect_mining_areas(
-    image_path="sentinel2_processed.tif",
-    output_dir="mining_detection",
-    method="rule_based"
-)
+2. **Install backend dependencies**
+```bash
+cd backend
+pip install -r requirements.txt
 ```
 
-### 3. Illegal Mining Detection
-```python
-from illegal_mining_detection import IllegalMiningDetection
-
-# Initialize illegal mining detection
-illegal_detector = IllegalMiningDetection()
-
-# Detect illegal mining
-results = illegal_detector.detect_illegal_mining(
-    mining_polygons_path="mining_polygons.shp",
-    boundary_path="mining_boundaries.shp",
-    output_dir="illegal_detection"
-)
+3. **Install frontend dependencies**
+```bash
+cd ../frontend
+npm install
 ```
 
-### 4. Volume Estimation
-```python
-from depth_volume_estimation import DepthVolumeEstimation
+4. **Set up Google Earth Engine**
+```bash
+# Install GEE CLI
+pip install earthengine-api
 
-# Initialize volume estimation
-estimator = DepthVolumeEstimation()
+# Authenticate (requires GEE account)
+earthengine authenticate
 
-# Estimate volume
-results = estimator.estimate_mining_volume(
-    dem_path="dem.tif",
-    mining_mask_path="mining_mask.tif",
-    output_dir="volume_estimation"
-)
+# Set up gcloud (if needed)
+brew install google-cloud-sdk
+gcloud auth login
+gcloud config set project YOUR_PROJECT_ID
+gcloud services enable earthengine.googleapis.com
 ```
+
+5. **Create .env file in backend/**
+```bash
+EE_PROJECT_ID=your-project-id
+```
+
+### Running the Application
+
+1. **Start the backend server**
+```bash
+cd backend
+python app.py
+```
+
+2. **Start the frontend development server**
+```bash
+cd frontend
+npm run dev
+```
+
+3. **Access the application**
+- Frontend: http://localhost:5173
+- Backend API: http://localhost:8000
+- API Documentation: http://localhost:8000/docs
+
+## 📊 Core Modules
+
+### 1. Data Acquisition (`gee_utils.py`)
+- Downloads Sentinel-2 multispectral imagery from Google Earth Engine
+- Fetches DEM data (SRTM/ALOS)
+- Handles cloud masking and composite generation
+- Direct download via GEE getDownloadURL
+
+### 2. Preprocessing (`preprocess.py`)
+- Reprojects rasters to target CRS
+- Normalizes spectral bands
+- Fills DEM voids and applies smoothing
+
+### 3. Mining Detection (`detect_indices.py`)
+- Calculates spectral indices (NDVI, BSI, NDBI, NDWI, SAVI, EVI, NBR)
+- Applies threshold-based classification
+- Performs morphological operations for noise reduction
+- Converts detection masks to vector polygons with properties
+
+### 4. Illegal Mining Detection (`compare_with_lease.py`)
+- Loads legal lease boundaries from various formats
+- Performs spatial overlay analysis
+- Classifies areas as legal/illegal/mixed
+- Calculates confidence scores and statistics
 
 ## 🔧 API Endpoints
 
-### Analysis Endpoints
-- `POST /api/analyze` - Run complete analysis
-- `POST /api/analyze/quick` - Run quick analysis
-- `GET /api/analysis/{analysis_id}` - Get analysis results
-- `GET /api/analysis` - List all analyses
-- `DELETE /api/analysis/{analysis_id}` - Delete analysis
+### Demo Endpoints (Current Implementation)
 
-### File Management
-- `POST /api/upload/boundary` - Upload boundary shapefile
-- `GET /api/download/report/{analysis_id}` - Download PDF report
-- `GET /api/download/visualization/{analysis_id}/{viz_type}` - Download visualizations
+- `GET /api/mining-boundaries` - Get 12 demo legal mining leases across India
+- `GET /api/satellite-data` - Get satellite-detected mining areas
+- `POST /api/analyze/quick` - Quick analysis workflow
+- `POST /api/analyze/illegal-mining-detection` - Complete detection analysis
+- `GET /api/illegal-mining-results/{analysis_id}` - Get analysis results
 
-### Statistics
-- `GET /api/statistics/{analysis_id}` - Get analysis statistics
-- `GET /api/status/{analysis_id}` - Get analysis status
+### Utility Endpoints
 
-## 📈 Analysis Workflow
+- `GET /api/health` - Health check
+- `GET /` - API information
 
-1. **Data Acquisition**: Download satellite imagery and DEM data
-2. **Preprocessing**: Reproject, clip, and normalize data
-3. **Mining Detection**: Identify mining areas using spectral indices
-4. **Illegal Mining Detection**: Compare with legal boundaries
-5. **Volume Estimation**: Calculate depth and volume of mining
-6. **Visualization**: Create 2D maps and 3D visualizations
-7. **Report Generation**: Generate comprehensive PDF reports
+## 🎨 Frontend Features
 
-## 🎯 Key Features
+- **Empty Map on Load**: No data shown initially, clean interface
+- **Beautiful Blur Popup**: Color legend explaining zones after clicking analysis
+- **Radar/Sonar Rings**: Expanding circular rings at mining locations (not balloons!)
+- **Zoom-Dependent Display**: Circle markers when zoomed out, detailed polygons when zoomed in
+- **Color-Coded Zones**:
+  - 🟢 Green: Legal mining boundaries
+  - 🔴 Red: Critical illegal violations (4+ locations)
+  - 🟠 Orange: Warning zones (4+ locations)
+  - 🔵 Blue: Satellite detections
+- **3D Visualization**: Interactive 3D terrain models with Plotly
+- **PDF Reports**: Color-coded PDF generation via browser print dialog
 
-### Mining Detection Methods
-- **Rule-based**: Uses NDVI and BSI indices for fast detection
-- **ML-based**: U-Net segmentation for advanced detection (optional)
+## 🔍 Detection Algorithm
 
-### Spectral Indices
-- **NDVI**: Normalized Difference Vegetation Index
-- **BSI**: Bare Soil Index for bare ground detection
+### Spectral Indices Used
 
-### Volume Estimation
-- **Simpson's Rule**: Advanced numerical integration for volume calculation
-- **DEM Analysis**: Elevation difference analysis for depth estimation
+1. **NDVI** (Normalized Difference Vegetation Index): `(NIR - Red) / (NIR + Red)` < 0.2
+2. **BSI** (Bare Soil Index): `((SWIR + Red) - (NIR + Blue)) / ((SWIR + Red) + (NIR + Blue))` > 0.3
+3. **NDBI** (Normalized Difference Built-up Index): `(SWIR - NIR) / (SWIR + NIR)` > 0.1
+4. **NDWI** (Normalized Difference Water Index): `(Green - NIR) / (Green + NIR)` < 0.2
 
-### Visualization
-- **2D Maps**: Interactive Leaflet maps with multiple layers
-- **3D Visualization**: PyVista and Plotly 3D surfaces
-- **Statistical Plots**: Comprehensive analysis charts
+### Classification Logic
 
-## 📋 Requirements
+Mining areas are detected when **at least 4 out of 7 conditions** are met.
 
-### Backend Dependencies
-- FastAPI 0.104.1
-- Rasterio 1.3.9
-- GeoPandas 0.14.1
-- Google Earth Engine API
-- PyVista 0.43.1
-- Plotly 5.17.0
-- ReportLab 4.0.7
+## 📊 Output Formats
 
-### Frontend Dependencies
-- React 19.1.1
-- React-Leaflet 4.2.1
-- Leaflet 1.9.4
-- TypeScript 5.8.3
+### Vector Data
+- **GeoJSON**: Web-compatible format with detailed properties
+- **Shapefile**: GIS standard format
 
-## 🤝 Contributing
+### Reports
+- **PDF**: Comprehensive color-coded analysis report with severity badges
+- **Interactive Popups**: Detailed information on map clicks
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+## 🛠️ Configuration
 
-## 📄 License
+### Spectral Thresholds
+```python
+thresholds = {
+    'ndvi': 0.2,      # Vegetation threshold
+    'bsi': 0.3,       # Bare soil threshold
+    'ndbi': 0.1,      # Built-up threshold
+    'ndwi': 0.2,      # Water threshold
+    'min_area_ha': 0.1,  # Minimum detection area
+    'max_area_ha': 1000, # Maximum detection area
+}
+```
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+## 📝 License
 
-## 🏆 Smart India Hackathon
-
-This project was developed for the Smart India Hackathon 2024, focusing on:
-- Detection of illegal mining activities
-- Use of satellite imagery and DEM data
-- Automated analysis and reporting
-- Interactive web interface
-- Real-time monitoring capabilities
-
-## 📞 Support
-
-For support and questions, please contact the development team or create an issue in the repository.
+This project is developed for the Smart India Hackathon and follows the competition guidelines.
 
 ## 🔮 Future Enhancements
 
-- Real-time satellite data processing
-- Machine learning model improvements
-- Mobile application
-- Integration with government databases
-- Advanced 3D visualization
-- Automated alert system
+- [ ] Integration with real government WFS/WMS endpoints for legal boundaries
+- [ ] Temporal change detection using multi-date imagery
+- [ ] Depth and volume estimation using DEM differencing
+- [ ] Machine learning-based detection
+- [ ] Real-time satellite data streaming
+- [ ] Cloud deployment with Docker
+- [ ] Advanced 3D visualization improvements
+- [ ] Automated alert system
+
+---
+
+**Built with ❤️ for Smart India Hackathon 2025**

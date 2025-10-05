@@ -1,0 +1,400 @@
+👉 Cursor Prompt — Detecting Illegal Mining Areas (End-to-End)
+
+You are helping build a Smart India Hackathon project: Detection of Illegal Open-Crust Mining Activity in India using satellite imagery (Sentinel-2, optionally Sentinel-1) and DEM. The deliverable is an end-to-end system that:
+
+Acquires satellite imagery and DEM for user-provided mining regions (and district/state extents).
+
+Preprocesses imagery and DEM (reproject, clip, align, normalize).
+
+Detects mining areas (fast MVP using spectral indices; optional advanced ML segmentation).
+
+Identifies illegal mining by spatially comparing detected mining polygons to legal lease boundaries (KML / Shapefile).
+
+Performs temporal change detection to find newly expanded mining beyond legal boundaries.
+
+Estimates depth & volume using DEM differences (Simpson’s rule or raster integration).
+
+Produces 2D & 3D visualizations (interactive map + 3D terrain view) and an auto-generated PDF report.
+
+Exposes core functionality via a FastAPI backend and can be run locally using Docker (docker-compose with frontend + backend + optional PostGIS).
+
+Below are detailed requirements, design choices, and precise code generation instructions. For each requested module, produce runnable Python code with comments and small example usage snippets.
+
+High-level answers to your questions (short & clear)
+
+Can we get actual legal mining boundaries in India?
+
+Yes, sometimes. Mining lease boundaries are usually held by state mining departments and district administrations. Availability varies by state. Public sources include state mining portals, district mineral fund (DMF) portals, and RTI/official GIS data releases. If not public, you must request data from the respective authority. For hackathon, you can use sample/legal polygons provided by organisers or digitize boundaries from public maps (or use administrative boundaries as a proxy).
+
+Is the workflow feasible?
+
+Yes. The standard approach: fetch imagery → detect disturbed/bare ground → polygonize disturbed areas → spatial overlay with legal lease polygons → compute difference → flag outside areas as illegal. Add temporal checks (before/after) to confirm newly illegal expansions.
+
+Do you need to train your own model?
+
+Not mandatory. MVP: spectral indices (NDVI, BSI, NDBI) and SAR metrics work well. For higher accuracy, fine-tune or use an off-the-shelf segmentation model.
+
+Detailed steps (what I want you to generate code for)
+A. Data acquisition (two options: GEE or local download)
+
+Ask Cursor to generate two modules:
+
+gee_utils.py — functions using Google Earth Engine (ee) to:
+
+Authenticate and initialize.
+
+Download Sentinel-2 image collection for a given polygon and date range (cloud filtering, median composite).
+
+Download Sentinel-1 VV/VH if requested.
+
+Download DEM layers (SRTM or Copernicus) clipped to polygon.
+
+Export processed rasters to local GeoTIFFs.
+
+Example function signatures:
+
+def download_sentinel2_aoi(aoi_geojson, start_date, end_date, out_path, bands=["B4","B3","B2","B8","B11","B12"]):
+    ...
+def download_dem(aoi_geojson, out_path, source="SRTM"):
+    ...
+
+
+sentinelsat_utils.py — functions using sentinelsat to fetch Sentinel-2 L2A products directly from Copernicus (alternative to GEE). Provide example for authentication and bulk download.
+
+Notes to implement:
+
+For GEE, include sample code to build a cloud-free composite: mask clouds using QA60 or SCL or the s2cloudless approach.
+
+Save multi-band GeoTIFFs with consistent band order (e.g., B4,B3,B2,B8,B11,B12) and CRS EPSG:4326.
+
+B. Preprocessing
+
+Create preprocess.py with functions to:
+
+Reproject rasters to EPSG:4326 (or UTM zone appropriate to the AOI).
+
+Clip raster to AOI shapefile (GeoJSON/GeoPandas).
+
+Resample DEM to match Sentinel-2 resolution (or resample Sentinel to DEM if preferred).
+
+Align raster grid + nodata handling.
+
+Normalize bands (scale reflectance to 0–1 or 0–10000 depending on data).
+
+Fill DEM voids (use gdal_fillnodata.py logic or scipy inpainting fallback).
+
+Example functions:
+
+def reproject_raster(src_path, dst_path, dst_crs="EPSG:4326"):
+    ...
+def clip_raster_by_shape(raster_path, shapefile_path, dst_path):
+    ...
+def match_rasters(raster_base, raster_to_match, out_matched):
+    ...
+
+
+Important technical note: For area calculation, reproject polygons to an equal-area CRS (e.g., EPSG:3857 or better: an appropriate UTM zone) before computing areas in square meters; then convert to hectares.
+
+C. Mining detection — Rule-based MVP (essential)
+
+Create detect_indices.py that:
+
+Loads multiband sentinel mosaic GeoTIFF (bands: Red=B4, Green=B3, Blue=B2, NIR=B8, SWIR1=B11, SWIR2=B12).
+
+Computes commonly used indices:
+
+NDVI = (NIR - Red) / (NIR + Red)
+
+BSI = ((SWIR + Red) - (NIR + Blue)) / ((SWIR + Red) + (NIR + Blue))
+
+NDBI = (SWIR - NIR) / (SWIR + NIR)
+
+NDWI (optional for water)
+
+Applies thresholds and morphological postprocessing:
+
+Suggested thresholds (start with these; Cursor should make them configurable):
+
+NDVI < 0.2 → candidate non-vegetated
+
+BSI > 0.3 → candidate bare/dirt
+
+Combine conditions: mask = (NDVI < ndvi_thresh) & (BSI > bsi_thresh)
+
+Remove small objects: use scipy.ndimage.binary_opening, skimage.morphology.remove_small_objects.
+
+Polygonize mask into vector polygons (GeoJSON) and simplify polygons.
+
+Compute area for each polygon (in hectares). Return polygons GeoDataFrame and mask raster.
+
+Key code pieces:
+
+Use rasterio for raster IO, numpy for calculation, shapely / geopandas for vectorization:
+
+with rasterio.open("sentinel.tif") as src:
+    red = src.read(red_band_index).astype('float32')
+    ...
+ndvi = (nir - red) / (nir + red + 1e-8)
+mask = np.logical_and(ndvi < 0.2, bsi > 0.3)
+
+D. Optional: ML-based segmentation (stretch goal)
+
+Create ml_segmentation.py that:
+
+Loads a pre-trained segmentation model (U-Net / DeepLabV3) from Hugging Face or segmentation_models_pytorch and prepares a predict function to take Sentinel bands and output a mask.
+
+Provide example fine-tuning loop if labeled polygons exist (train/val loader, augmentations with albumentations).
+
+Provide prediction wrapper that outputs same polygonized format as the rule-based pipeline.
+
+Note: Make payload small: use pretrained weights and allow CPU inference or GPU if available.
+
+E. Illegal mining detection: spatial overlay and comparison
+
+Create compare_with_lease.py that:
+
+Loads lease polygons (KML / Shapefile / GeoJSON). Provide helper read_lease_shapefile(path) supporting common formats.
+
+Projects both detected mining polygons and lease polygons to an equal-area CRS suitable for AOI (auto-select UTM or use EPSG:3857).
+
+For each detected mining polygon, compute:
+
+inside_intersection = detected_poly.intersection(lease_union)
+
+outside_part = detected_poly.difference(lease_union)
+
+Flag polygon as:
+
+legal if outside_part.area < tolerance (e.g., small spill < 0.01 ha)
+
+illegal if outside_part.area > threshold
+
+Compute total area inside leases and outside leases (in hectares). Also compute percent of detected mining that is outside legal boundary.
+
+Return a GeoDataFrame with attributes: area_ha, inside_ha, outside_ha, status ('legal'/'illegal'/'mixed').
+
+Edge cases:
+
+Sometimes lease boundaries are outdated or inaccurate; include a buffer parameter to allow small tolerance (e.g., 5–10 m) before labeling as illegal. Cursor should expose buffer_meters argument.
+
+Sample geopandas operations:
+
+lease_union = lease_gdf.unary_union
+detected_gdf['inside_geom'] = detected_gdf.geometry.apply(lambda g: g.intersection(lease_union))
+detected_gdf['outside_geom'] = detected_gdf.geometry.apply(lambda g: g.difference(lease_union))
+
+F. Temporal / change detection (important to prove illegality over time)
+
+Create temporal_change.py that:
+
+Accepts two date ranges: pre_date_range and post_date_range.
+
+Downloads two cloud-free composites (pre & post).
+
+Computes difference in indices (ΔNDVI, ΔBSI), or simple image difference on SWIR/NIR bands.
+
+For post composite, compute new_disturbance = (post_mask == 1) & (pre_mask == 0) to find new mining expansion.
+
+Overlay new_disturbance with lease polygons to find new illegal expansions after pre_date.
+
+Produce a change polygon layer with change_date, area_ha, and illegal_flag.
+
+This helps: confirm that mining crossed the boundary between two dates — strong evidence for illegal mining.
+
+G. DEM-based depth & volume estimation
+
+Create volume_estimation.py that:
+
+Inputs:
+
+dem_pre.tif (DEM before mining) — optional
+
+dem_post.tif (DEM after mining) — required for single-time estimation you can use local baseline
+
+detected_mining_polygons (GeoDataFrame)
+
+If pre & post DEMs exist: depth_raster = dem_pre - dem_post clipped to detected polygons (positive depth means excavation).
+
+If only single DEM: create a local baseline surface by interpolating surrounding undisturbed elevation:
+
+Create buffer ring around each mining polygon (e.g., 50–200 m), sample DEM values outside polygon and build a trend surface (plane or low-order polynomial) to approximate pre-mining elevation, then subtract post DEM to get depth.
+
+Compute volume by raster integration:
+
+Convert depth raster (m) to positive excavation depth values (clip negative values to 0).
+
+Multiply each pixel depth by pixel area to get voxel volume → sum.
+
+For improved accuracy, implement Simpson’s rule on profiles or use simple Riemann sum over raster cells:
+
+pixel_area = abs(transform.a * transform.e)  # from rasterio transform
+volume_m3 = (depth_raster * pixel_area).sum()
+
+
+If using Simpson’s rule on 2D grid, give optional implementation: apply Simpson across rows then columns (complex but include reference).
+
+Output per-polygon:
+
+avg_depth_m, max_depth_m, volume_m3.
+
+Save depth raster and polygon attribute table.
+
+Note: Always check CRS & pixel area units (meters). If DEM is in lat/lon, reproject to a projected CRS first.
+
+H. Visualization
+
+Create visualization.py and a small React frontend example.
+
+Python / Jupyter (quick demo):
+
+folium map with:
+
+Sentinel base tile (or static PNG overlay).
+
+Lease polygon layer (style: green border).
+
+Detected mining polygon layer (style: red fill with opacity).
+
+Illegal polygons highlighted (yellow/orange).
+
+pyvista or plotly for 3D DEM surface with overlay of polygons (use GeoJSON to overlay shapes on 3D terrain).
+
+Export 3D snapshot images for report.
+
+React Frontend (outline):
+
+Use React + Leaflet (react-leaflet) for 2D mapping.
+
+Use CesiumJS for 3D globe/terrain + polygon overlay (or use Deck.gl + Mapbox Terrain).
+
+Endpoint pattern:
+
+POST /api/upload-shapefile — user uploads lease shapefile
+
+POST /api/run-detection — run detection and return result GeoJSON and summary stats
+
+GET /api/preview/{job_id} — preview tiles + download report
+
+I. Report generation
+
+Create reporting.py with functions to:
+
+Render an HTML report via jinja2 with:
+
+Summary table: total_detected_area_ha, illegal_area_ha, avg_depth_m, volume_m3, dates.
+
+Embedded static map images (png) and 3D snapshots (png).
+
+Attach GeoJSON and shapefile of results.
+
+Convert HTML to PDF using weasyprint or pdfkit (wkhtmltopdf).
+
+Also support CSV export of polygon attributes.
+
+J. API + Deployment (FastAPI + Docker)
+
+Create a small FastAPI application app/main.py exposing:
+
+POST /api/upload-lease — accepts zipped shapefile / kml / geojson.
+
+POST /api/detect — JSON body with AOI GeoJSON or lease id and date range + options (useGEE true/false, useSAR true/false).
+
+GET /api/results/{job_id} — returns status, result GeoJSON, stats, and download links.
+
+GET /api/report/{job_id} — returns generated PDF.
+
+Docker:
+
+Provide Dockerfile for backend (include system deps for GDAL, rasterio, geopandas). Use python:3.11-slim base and install apt packages: gdal-bin libgdal-dev. Set proper GDAL_VERSION env if needed.
+
+Provide docker-compose.yml to spin up:
+
+backend service (FastAPI + uvicorn)
+
+frontend service (React dev server or production nginx)
+
+postgis service (optional, if using PostGIS)
+
+Include instructions for docker-compose up --build.
+
+Extra practical notes — ask Cursor to include these in code comments
+
+CRS handling: always reproject vector layers to the same CRS as rasters before analysis; compute areas in projected CRS.
+
+Pixel area: compute pixel area from raster transform; ensure area units are in square meters.
+
+Noisy detections: apply morphological opening/closing and remove_small_objects to reduce noise.
+
+Buffer tolerance: give parameter lease_tolerance_meters to allow small encroachments (e.g., machine tracks) without flagging illegal.
+
+Confidence score: for each polygon compute a confidence metric (index values percentiles, size, shape compactness) to help triage.
+
+Logging & reproducibility: log date ranges, cloud coverage, GEE request IDs; store intermediate rasters in ./data/ with descriptive filenames.
+
+Exact modules & filenames to generate
+
+Ask Cursor to generate the following files (one by one or a repo):
+
+/mining-detector/
+  backend/
+    app/
+      main.py                # FastAPI app
+      detection.py           # orchestration: calls preprocessing, detect, compare, volume
+      gee_utils.py
+      sentinelsat_utils.py
+      preprocess.py
+      detect_indices.py
+      ml_segmentation.py
+      compare_with_lease.py
+      temporal_change.py
+      volume_estimation.py
+      visualization.py
+      reporting.py
+    Dockerfile
+    requirements.txt
+    docker-compose.yml
+  frontend/
+    (small React + Leaflet skeleton)
+  docs/
+    README.md               # run instructions
+    sample_aoi.geojson
+    sample_lease.zip
+
+Generate tests & example workflow
+
+Ask Cursor to produce:
+
+A run_demo.py script that:
+
+Loads a sample AOI GeoJSON (provided).
+
+Calls gee_utils.download_sentinel2_aoi(...) to create sentinel.tif (or for offline demo, reads provided sample_sentinel.tif).
+
+Runs detect_indices.mask = detect_indices.generate_mask("sentinel.tif")
+
+Polygonizes, compares with sample_lease.shp, computes illegal area, runs volume_estimation with sample_dem.tif.
+
+Produces a PDF report demo_report.pdf.
+
+Unit tests (pytest) for key functions: area calculation, overlay/difference logic, volume calc (on small arrays).
+
+Final instruction to Cursor
+
+Provide full working code for each module with docstrings, comments, and minimal external dependencies.
+
+Use rasterio, geopandas, shapely, numpy, scipy, pyproj, fiona, matplotlib, folium, pyvista / plotly where relevant.
+
+Provide a README.md with commands to:
+
+Set up GEE authentication (if GEE code included).
+
+Run the demo with local sample files (no GEE account required).
+
+Build & run docker containers.
+
+If a step requires credentials (GEE, Copernicus), detect that and provide fallback to offline sample images (include instructions how to replace with real credentials).
+
+Finally, produce a short presentation.md with:
+
+Architecture diagram (ASCII or Mermaid) and slide content to show judges: problem, data, methods, results, demo steps, limitations, next steps.
+

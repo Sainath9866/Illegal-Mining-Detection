@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -47,6 +47,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
   const illegalAreasLayerRef = useRef<L.LayerGroup | null>(null);
   const violationZonesLayerRef = useRef<L.LayerGroup | null>(null);
   const satelliteLayerRef = useRef<L.LayerGroup | null>(null);
+  const [currentZoom, setCurrentZoom] = useState(zoom);
 
   useEffect(() => {
     if (!mapRef.current) return;
@@ -60,6 +61,12 @@ const MapComponent: React.FC<MapComponentProps> = ({
     // Create new map
     const map = L.map(mapRef.current).setView(center, zoom);
     mapInstanceRef.current = map;
+    setCurrentZoom(zoom);
+
+    // Track zoom changes
+    map.on('zoomend', () => {
+      setCurrentZoom(map.getZoom());
+    });
 
     // Add tile layer
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -107,15 +114,21 @@ const MapComponent: React.FC<MapComponentProps> = ({
       const boundariesLayer = L.layerGroup();
       boundariesLayerRef.current = boundariesLayer;
 
-      // Add each mining lease as a polygon
+      // Add each mining lease as a polygon or circle marker depending on zoom
       miningBoundaries.boundaries.features.forEach((feature: any) => {
         const coords = feature.geometry.coordinates[0].map((coord: [number, number]) => [coord[1], coord[0]]);
-                const polygon = L.polygon(coords, {
-                  color: '#2ecc71',
-                  weight: 5,
-                  fillColor: '#2ecc71',
-                  fillOpacity: 0.5
-                });
+        
+        // Calculate centroid for circle marker
+        const centroid = coords.reduce((acc: [number, number], coord: [number, number]) => [acc[0] + coord[0] / coords.length, acc[1] + coord[1] / coords.length], [0, 0]);
+        
+        // Add polygon (always, for detailed view)
+        const polygon = L.polygon(coords, {
+          color: '#2ecc71',
+          weight: currentZoom < 7 ? 2 : 5,
+          fillColor: '#2ecc71',
+          fillOpacity: currentZoom < 7 ? 0.3 : 0.5,
+          className: 'legal-mining-polygon'
+        });
 
         // Add popup with detailed lease information
         const popupContent = `
@@ -145,14 +158,34 @@ const MapComponent: React.FC<MapComponentProps> = ({
           </div>
         `;
         polygon.bindPopup(popupContent);
-
         boundariesLayer.addLayer(polygon);
+        
+        // Add radar ring marker when zoomed out (< 7)
+        if (currentZoom < 7) {
+          // Create custom HTML marker with radar rings
+          const radarIcon = L.divIcon({
+            className: 'radar-marker',
+            html: `
+              <div class="radar-container">
+                <div class="radar-ring legal-ring"></div>
+                <div class="radar-ring legal-ring" style="animation-delay: 0.6s"></div>
+                <div class="radar-ring legal-ring" style="animation-delay: 1.2s"></div>
+                <div class="radar-dot legal-dot"></div>
+              </div>
+            `,
+            iconSize: [60, 60],
+            iconAnchor: [30, 30]
+          });
+          const marker = L.marker([centroid[0], centroid[1]], { icon: radarIcon });
+          marker.bindPopup(popupContent);
+          boundariesLayer.addLayer(marker);
+        }
       });
 
             // Add boundaries layer to map
             boundariesLayer.addTo(mapInstanceRef.current);
           }
-        }, [miningBoundaries, showBoundaries]);
+        }, [miningBoundaries, showBoundaries, currentZoom]);
 
         // Add/remove illegal areas when they change
         useEffect(() => {
@@ -239,12 +272,15 @@ const MapComponent: React.FC<MapComponentProps> = ({
       // Add red zones (critical violations)
       violationZones.redZones.forEach((zone) => {
         const coords = zone.geometry.coordinates[0].map((coord: [number, number]) => [coord[1], coord[0]] as [number, number]);
+        const centroid = coords.reduce((acc: [number, number], coord: [number, number]) => [acc[0] + coord[0] / coords.length, acc[1] + coord[1] / coords.length], [0, 0]);
+        
         const polygon = L.polygon(coords, {
           color: '#dc2626',
-          weight: 4,
+          weight: currentZoom < 7 ? 2 : 4,
           fillColor: '#dc2626',
-          fillOpacity: 0.7,
-          dashArray: '10, 5'
+          fillOpacity: currentZoom < 7 ? 0.4 : 0.7,
+          dashArray: '10, 5',
+          className: 'illegal-mining-polygon'
         });
 
         // Add popup with zone information
@@ -259,19 +295,41 @@ const MapComponent: React.FC<MapComponentProps> = ({
           </div>
         `;
         polygon.bindPopup(popupContent);
-
         violationZonesLayer.addLayer(polygon);
+        
+        // Add radar ring marker when zoomed out
+        if (currentZoom < 7) {
+          const radarIcon = L.divIcon({
+            className: 'radar-marker',
+            html: `
+              <div class="radar-container">
+                <div class="radar-ring illegal-ring"></div>
+                <div class="radar-ring illegal-ring" style="animation-delay: 0.5s"></div>
+                <div class="radar-ring illegal-ring" style="animation-delay: 1s"></div>
+                <div class="radar-dot illegal-dot"></div>
+              </div>
+            `,
+            iconSize: [70, 70],
+            iconAnchor: [35, 35]
+          });
+          const marker = L.marker([centroid[0], centroid[1]], { icon: radarIcon });
+          marker.bindPopup(popupContent);
+          violationZonesLayer.addLayer(marker);
+        }
       });
 
       // Add orange zones (warning violations)
       violationZones.orangeZones.forEach((zone) => {
         const coords = zone.geometry.coordinates[0].map((coord: [number, number]) => [coord[1], coord[0]] as [number, number]);
+        const centroid = coords.reduce((acc: [number, number], coord: [number, number]) => [acc[0] + coord[0] / coords.length, acc[1] + coord[1] / coords.length], [0, 0]);
+        
         const polygon = L.polygon(coords, {
           color: '#f59e0b',
-          weight: 3,
+          weight: currentZoom < 7 ? 2 : 3,
           fillColor: '#f59e0b',
-          fillOpacity: 0.6,
-          dashArray: '8, 8'
+          fillOpacity: currentZoom < 7 ? 0.3 : 0.6,
+          dashArray: '8, 8',
+          className: 'illegal-mining-polygon'
         });
 
         // Add popup with zone information
@@ -286,14 +344,33 @@ const MapComponent: React.FC<MapComponentProps> = ({
           </div>
         `;
         polygon.bindPopup(popupContent);
-
         violationZonesLayer.addLayer(polygon);
+        
+        // Add radar ring marker when zoomed out
+        if (currentZoom < 7) {
+          const radarIcon = L.divIcon({
+            className: 'radar-marker',
+            html: `
+              <div class="radar-container">
+                <div class="radar-ring warning-ring"></div>
+                <div class="radar-ring warning-ring" style="animation-delay: 0.6s"></div>
+                <div class="radar-ring warning-ring" style="animation-delay: 1.2s"></div>
+                <div class="radar-dot warning-dot"></div>
+              </div>
+            `,
+            iconSize: [65, 65],
+            iconAnchor: [32, 32]
+          });
+          const marker = L.marker([centroid[0], centroid[1]], { icon: radarIcon });
+          marker.bindPopup(popupContent);
+          violationZonesLayer.addLayer(marker);
+        }
       });
 
       // Add violation zones layer to map
       violationZonesLayer.addTo(mapInstanceRef.current);
     }
-  }, [violationZones]);
+  }, [violationZones, currentZoom]);
 
   // Add/remove satellite data when it changes
   useEffect(() => {
@@ -312,12 +389,15 @@ const MapComponent: React.FC<MapComponentProps> = ({
       // Add satellite-detected mining areas
       satelliteData.geojson.features.forEach((feature: any) => {
         const coords = feature.geometry.coordinates[0].map((coord: [number, number]) => [coord[1], coord[0]] as [number, number]);
+        const centroid = coords.reduce((acc: [number, number], coord: [number, number]) => [acc[0] + coord[0] / coords.length, acc[1] + coord[1] / coords.length], [0, 0]);
+        
         const polygon = L.polygon(coords, {
           color: '#3498db',
-          weight: 2,
+          weight: currentZoom < 7 ? 1 : 2,
           fillColor: '#3498db',
-          fillOpacity: 0.6,
-          dashArray: '5, 5'
+          fillOpacity: currentZoom < 7 ? 0.3 : 0.6,
+          dashArray: '5, 5',
+          className: 'satellite-mining-polygon'
         });
 
         // Add popup with satellite data information
@@ -335,14 +415,33 @@ const MapComponent: React.FC<MapComponentProps> = ({
           </div>
         `;
         polygon.bindPopup(popupContent);
-
         satelliteLayer.addLayer(polygon);
+        
+        // Add radar ring marker when zoomed out
+        if (currentZoom < 7) {
+          const radarIcon = L.divIcon({
+            className: 'radar-marker',
+            html: `
+              <div class="radar-container">
+                <div class="radar-ring satellite-ring"></div>
+                <div class="radar-ring satellite-ring" style="animation-delay: 0.7s"></div>
+                <div class="radar-ring satellite-ring" style="animation-delay: 1.4s"></div>
+                <div class="radar-dot satellite-dot"></div>
+              </div>
+            `,
+            iconSize: [55, 55],
+            iconAnchor: [27, 27]
+          });
+          const marker = L.marker([centroid[0], centroid[1]], { icon: radarIcon });
+          marker.bindPopup(popupContent);
+          satelliteLayer.addLayer(marker);
+        }
       });
 
       // Add satellite layer to map
       satelliteLayer.addTo(mapInstanceRef.current);
     }
-  }, [satelliteData]);
+  }, [satelliteData, currentZoom]);
 
   return <div ref={mapRef} style={style} />;
 };
